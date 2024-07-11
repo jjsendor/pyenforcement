@@ -2,11 +2,10 @@
 import dateutil.parser
 import json
 import re
-import urllib
-import urllib2
 import urlparse
 
 # 3rd party libraries
+import requests
 
 # project libraries
 
@@ -22,7 +21,7 @@ class Api():
 	- Enforcement().add_events(events)
 	- Enforcement().delete_domain(domain_name_or_id)
 	"""
-	def __init__(self, key, version=1.0):
+	def __init__(self, key, version=1.1):
 		self.key = key
 		self.version = version
 		self.event_time_format = '%Y-%m-%dT%H:%M:%S.%z'
@@ -34,27 +33,25 @@ class Api():
 		"""
 		params = {
 			'customerKey': self.key,
-			'limit': 1,
 			}
 
 		if kwargs is not None:
 			# merge the passed parameters with the default
 			for k, v in kwargs.items():	params[k] = v
 
-		query_string = urllib.urlencode(params)
-		url = '{}/{}?{}'.format(self.base_url, url_relative_path, query_string)
-		response = None
-		try:
-			response = urllib.urlopen(url)
-		except Exception, err:
-			raise(OpenDnsApiException('Unsuccessful request to URL [{}]. Threw exception: {}'.format(url, err)))
-
 		results = None
-		if response:
-			try:
-				results = json.load(response)
-			except Exception, err:
-				raise(OpenDnsApiException('Could not convert the response from URL [{}] to JSON. Threw exception: {}'.format(url, err)))
+		resp = None
+		try:
+			resp = requests.get('{}/{}'.format(self.base_url, url_relative_path), params=params)
+			if resp.ok:
+				try:
+					results = resp.json()
+				except Exception, err:
+					raise(OpenDnsApiException('Could not convert the response from URL [{}] to JSON. Threw exception: {}'.format(resp.url, err)))
+			else:
+				raise(OpenDnsApiException('Unsuccessful request to URL [{}]. HTTP status {}'.format(resp.url, resp.status_code)))
+		except Exception, err:
+			raise(OpenDnsApiException('Unsuccessful request to URL [{}]. Threw exception: {}'.format(resp.url, err)))
 
 		return results
 
@@ -70,21 +67,20 @@ class Api():
 			# merge the passed parameters with the default
 			for k, v in kwargs.items():	data[k] = v
 
-		url = '{}/{}?{}'.format(self.base_url, url_relative_path, urllib.urlencode(auth_params))
-		response = None
-		try:
-			req = urllib2.Request(url)
-			req.add_header('Content-Type', 'application/json')
-			response = urllib2.urlopen(req, json.dumps(data))
-		except Exception, err:
-			raise(APIException('Unsuccessful request to URL [{}]. Threw exception: {}'.format(url, err)))
-
 		results = None
-		if response:
+		resp = None
+		url = '{}/{}'.format(self.base_url, url_relative_path)
+		headers = {'Content-Type': 'application/json'}
+		try:
+			resp = requests.post(url, headers=headers, params=auth_params, data=json.dumps(data))
 			try:
-				results = json.load(response)
+				results = resp.json()
 			except Exception, err:
-				raise(OpenDnsApiException('Could not convert the response from URL [{}] to JSON. Threw exception: {}'.format(url, err)))
+				raise(OpenDnsApiException('Could not convert the response from URL [{}] to JSON. Threw exception: {}'.format(resp.url, err)))
+			if resp.ok == False:
+				raise(OpenDnsApiException('Unsuccessful request to URL [{}]. Server message: {}'.format(resp.url, results)))
+		except Exception, err:
+			raise(OpenDnsApiException('Unsuccessful request to URL [{}]. Threw exception: {}'.format(resp.url, err)))
 
 		return results
 
@@ -92,32 +88,20 @@ class Api():
 		"""
 		Make an HTTP DELETE request to the specified URL
 		"""
+
 		params['customerKey'] = self.key
-
-		url = '{}/{}?{}'.format(self.base_url, url_relative_path, urllib.urlencode(params))
-
-		# build a DELETE request
-		# with help from http://stackoverflow.com/questions/17279416/cannot-get-delete-working-with-liburl2-with-python-for-rest-api
-		opener = urllib2.build_opener(urllib2.HTTPHandler)
-		req = urllib2.Request(url, None)
-		req.get_method = lambda: 'DELETE'
-		req.add_header('Content-Type', 'application/json')
-
-		response = None
+		url = '{}/{}'.format(self.base_url, url_relative_path)
+		headers = {'Content-Type': 'application/json'}
+		resp = None
 		try:
-			response = urllib2.urlopen(req)
-		except urllib2.HTTPError, err:
-			if err.code == 404:
-				response = False
-			else:
-				raise(OpenDnsApiException('Could not delete the specified domain(s). Threw exception: {}'.format(err)))
+			resp = requests.delete(url, headers=headers, params=params)
+			if resp.status_code == 204:
+				return True
+			elif resp.status_code == 404:
+				return False
+			raise(OpenDnsApiException('Server Error {}'.format(resp.json())))
 		except Exception, err:
 			raise(OpenDnsApiException('Could not delete the specified domain(s). Threw exception: {}'.format(err)))
-
-		if response and response.getcode() == 204:
-			return True
-		else:
-			return False
 
 	def add_events(self, events): 
 		"""
@@ -155,11 +139,11 @@ class Api():
 					results[entry['name']] = entry['id']
 
 				# are there more pages to request?
-				if response and response['next']:
+				if response and response['meta']['next']:
 					# the next value is the complete URL of the next page, pull out just the page number
-					next_url = urlparse.urlparse(response['next'])
+					next_url = urlparse.urlparse(response['meta']['next'])
 					page = urlparse.parse_qs(next_url.query)['page'][0]
-					print "next page: {}".format(page)
+					#print "next page: {}".format(page)
 				else:
 					more_pages = False
 

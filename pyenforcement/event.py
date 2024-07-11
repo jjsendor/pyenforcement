@@ -30,6 +30,7 @@ class GenericEvent():
 		self.file_name = None
 		self.file_hash = None
 		self.external_url = None
+		self.disable_dst_safeguards = None
 		self.src = None
 
 	def _convert_timestamp(self, timestamp):
@@ -57,10 +58,10 @@ class GenericEvent():
 		Check to see if the specified string is conforms to the domain spec, RFC3986 
 		"""
 		# domain regex from discussion at http://stackoverflow.com/questions/10306690/domain-name-validation-with-regex
-		# answer by Tim Groeneveld, http://stackoverflow.com/users/2143004/timgws
-		pattern = re.compile(r'^((?!-))(xn--)?[a-z0-9][a-z0-9-_]{0,61}[a-z0-9]{0,1}\.(xn--)?([a-z0-9\-]{1,61}|[a-z0-9-]{1,30}\.[a-z]{2,})$')
+		# answer by Andre Domaszek, https://stackoverflow.com/a/41193739
+		pattern = re.compile(r'^(?=.{1,253}\.?$)(?:(?!-|[^.]+_)[A-Za-z0-9-_]{1,63}(?<!-)(?:\.|$)){2,}$')
 		
-		m = pattern.search(possible_domain[0:255].strip())
+		m = pattern.search(possible_domain.strip())
 		if m:
 			return possible_domain
 		else:
@@ -95,6 +96,7 @@ class GenericEvent():
 			'file_hash',
 			'external_url',
 			'src',
+			'disable_dst_safeguards',
 			]
 
 	def _is_valid(self, return_failed_properties=False):
@@ -103,20 +105,10 @@ class GenericEvent():
 
 		Details available at http://s-platform.opendns.com/#eventformat
 		"""
-		required = [
-			'device_id',
-			'device_version',
-			'event_time',
-			'alert_time',
-			'dst_domain',
-			'dst_url',
-			'protocol_version',
-			'provider_name',
-			]
 
 		is_valid = True
 		failed_properties = []
-		for obj_property in required:
+		for obj_property in self.required_properties():
 			current_value = getattr(self, obj_property)
 			if not current_value or current_value == '':
 				failed_properties.append(obj_property)
@@ -137,32 +129,16 @@ class GenericEvent():
 		"""
 		Convert the event to a JSON document
 		"""
-		properties = [
-			'device_id',
-			'device_version',
-			'event_time',
-			'alert_time',
-			'dst_domain',
-			'dst_url',
-			'protocol_version',
-			'provider_name',
-			'dst_ip',
-			'event_severity',
-			'event_type',
-			'event_description',
-			'event_hash',
-			'file_name',
-			'file_hash',
-			'external_url',
-			'src',
-			]
+		properties = self.required_properties() + self.optional_properties()
 
 		if not self._is_valid(): return None
 
 		doc = {}
 		for obj_property in properties:			
 			# make sure we use the API name and not the pythonic one
-			api_name = '{}{}'.format(obj_property.split('_')[0], obj_property.split('_')[-1].title())
+			_words = obj_property.split('_')
+			_words[1:] = map(str.title, _words[1:])
+			api_name = ''.join(_words)
 
 			current_value = getattr(self, obj_property)
 			# make sure the value conforms to spec
@@ -174,6 +150,9 @@ class GenericEvent():
 				current_value = '1.0a' # currently the only accepted value
 			elif api_name == 'providerName':
 				current_value = 'Security Platform' # currently the only accepted value
+			elif api_name == 'disableDstSafeguards':
+				if current_value != True:
+					current_value = None
 			
 			if not current_value or current_value == '':
 				continue # don't convert this property

@@ -4,10 +4,11 @@ PyEnforcement is a python module for accessing the [OpenDNS Security Platform AP
 
 ## Installation
 
-PyEnforcement required the [dateutil module](https://pypi.python.org/pypi/python-dateutil). You can install it via:
+PyEnforcement requires the [dateutil](https://pypi.python.org/pypi/python-dateutil)
+and [requests](https://pypi.python.org/pypi/requests) modules. To install:
 
 ```
-pip install python-dateutil
+pip install python-dateutil requests
 ```
 
 Or:
@@ -22,11 +23,15 @@ Once that's installed:
 python setup.py install
 ```
 
-...working on PyPI. For now, clone & go.
+PyPI support may happen in the future. For now, clone & go.
 
 ## Usage
 
-The module is very simple to use. But the first step you have to take is to get your customer key from the Umbrella Dashboard. OpenDNS has published instructions on [how to get the key](https://support.opendns.com/entries/67200684?flash_digest=7ab73d9693636fe1ea93141c2e239f6de0a1a193) on their support site.
+The module is very simple to use. But the first step you have to take is to
+get your customer key from the Umbrella Dashboard. OpenDNS has published
+instructions on
+[how to get the key](https://support.opendns.com/entries/67200684?flash_digest=7ab73d9693636fe1ea93141c2e239f6de0a1a193)
+on their support site.
 
 Once you have the key, the module is as easy as:
 
@@ -42,9 +47,9 @@ current_list = opendns.list_domains()
 
 The enforcement.Api() class exposes three main methods:
 
-1. .list_domains()
-2. .add_events(events)
-3. .delete(domain_name_or_id)
+1. `.list_domains()`
+2. `.add_events(events)`
+3. `.delete(domain_name_or_id)`
 
 Each of these is a direct python implement of the matching API endpoint.
 
